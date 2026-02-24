@@ -122,3 +122,52 @@ def run(
         catch case _: java.io.IOException => System.exit(0)
 
 def main(args: Array[String]): Unit = ParserForMethods(this).runOrExit(args.toSeq)
+
+ABDUL SHAD PROJECT 1C LLM Interaction:
+User: yo so now im doing project 1c and the teacher wants us to make everything purely functional. no mutable state or vars. my teamate just pushed a WordProcessor class for 1b that uses var, mutable.Queue, and mutable.Map. how do we rewrite the core logic to be pure scala 3? i wanna start this off like last time with the logic and leave the rest for them.
+
+AI: That’s a great split of the work. To move from imperative (mutable) to purely functional, you have to separate your state from your actions. Instead of modifying a queue in place, we will define an immutable State and write a pure function that takes an old state and a new word, and returns a brand-new state.
+
+We can put this in a trait called PureWordCounter. We'll start with the state:
+
+Scala
+trait PureWordCounter:
+  case class State(window: Vector[String], counts: Map[String, Int])
+User: ok that makes sense for the state. but if its immutable, how do i actually add a word to the window or update the count if i cant use .enqueue or += anymore? do i just make a whole new map every time? aint that bad for memory?
+
+AI: That's a great question and a very common concern when learning functional programming. Scala's immutable collections use "structural sharing" under the hood. When you "add" to an immutable Map or Vector, it doesn't copy the whole thing; it just creates a new node that points to the rest of the existing structure.
+
+You use :+ to append to a Vector, and .updated() for the Map:
+
+Scala
+  def updateState(state: State, newWord: String, windowSize: Int): State =
+    val addedWindow = state.window :+ newWord
+    val currentCount = state.counts.getOrElse(newWord, 0)
+    val addedCounts = state.counts.updated(newWord, currentCount + 1)
+    // ... logic to handle window size ...
+User: kk im lookin at this updateState function. what about wen the window gets too big, in the old code we did dequeue to keep that constant requirement thing you remmmeber, how do i drop the oldest word and lower its count in the immutable version
+
+AI: To simulate a dequeue on an immutable Vector, you just take its .tail (everything except the first element). Then, you calculate the new count for that removed word. If the count hits zero, you remove it from the Map entirely using -.
+
+Here is the complete pure function combining those concepts:
+
+Scala
+    if addedWindow.length > windowSize then
+      val removedWord = addedWindow.head
+      val newWindow = addedWindow.tail
+      val countAfterRemoval = addedCounts(removedWord) - 1
+      
+      val newCounts = if countAfterRemoval <= 0 then
+        addedCounts - removedWord
+      else
+        addedCounts.updated(removedWord, countAfterRemoval)
+        
+      State(newWindow, newCounts)
+    else
+      State(addedWindow, addedCounts)
+User: this shi look good so imma put this in PureWordCounter.scala im leaving the Main.scala wiring and rewriting the scalatest stuff for my teamates does that sound good. the instructions hint at using Iterator.scanLeft, what should i tell em to do with that?
+
+AI: Perfect plan. You can tell your teammates that Iterator.scanLeft is the purely functional way to process a stream. It works like a snowball: it takes our State(Vector.empty, Map.empty) as the starting point, and then applies the updateState function to every single word coming from stdin.
+
+They just need to delete the old OutputHandler observer and the mutable WordProcessor loop in Main, and replace it with:
+words.scanLeft(initialState)((state, word) => updateState(state, word, windowSize))
