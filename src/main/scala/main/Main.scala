@@ -3,7 +3,7 @@ package edu.luc.cs.cs371.topwords
 import mainargs.{main, arg, ParserForMethods}
 import scala.io.Source
 
-object Main:
+object Main extends PureWordCounter:
 
   @main
   def run(
@@ -14,8 +14,26 @@ object Main:
 
     System.err.println(s"cloudSize=$cloudSize minLength=$minLength windowSize=$windowSize")
 
-    val consoleOutput = new OutputHandler:
-      def handleOutput(topWords: Seq[(String, Int)]): Unit =
+    // Read and filter words
+    val wordPattern = """[\p{Alpha}0-9']+""".r
+    val lines = Source.fromInputStream(System.in).getLines()
+    val words = lines.flatMap(line => wordPattern.findAllIn(line))
+      .filter(_.length >= minLength)
+
+    // Use scanLeft 
+    val initialState = State(Vector.empty, Map.empty)
+    val states = words.scanLeft(initialState) { (state, word) =>
+      updateState(state, word, windowSize)
+    }
+
+    
+    states.drop(1).zipWithIndex.foreach { case (state, index) =>
+      // Only output after window is full
+      if index + 1 >= windowSize then
+        val topWords = state.counts.toSeq
+          .sortBy { case (w, f) => (-f, w) }
+          .take(cloudSize)
+
         val cloud = topWords
           .map { case (w, f) => s"$w: $f" }
           .mkString(" ")
@@ -25,16 +43,7 @@ object Main:
         catch
           case _: java.io.IOException =>
             System.exit(0)
-
-    val processor = new WordProcessor(cloudSize, minLength, windowSize, consoleOutput)
-
-    val wordPattern = """[\p{Alpha}0-9']+""".r
-    val lines = Source.fromInputStream(System.in).getLines()
-
-    for line <- lines do
-      val words = wordPattern.findAllIn(line)
-      for word <- words do
-        processor.processWord(word)
+    }
 
   def main(args: Array[String]): Unit =
     ParserForMethods(this).runOrExit(args.toSeq)
